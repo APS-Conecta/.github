@@ -19,7 +19,7 @@ y que la información no se pueda buscar ni analizar. APS Conecta la convierte e
 
 - **Construido sobre software libre y de código abierto**, **auto-alojado** — sin licencias
   pagadas. El código propio de APS Conecta es **propietario**.
-- Centrado en la **privacidad**: pensado para operación interna, **sin datos clínicos de pacientes**.
+- Centrado en la **privacidad**: pensado para operación interna.
 - Construido sobre plataformas abiertas y consolidadas, no desde cero.
 
 **Cómo trabaja esta organización.** APS Conecta lo desarrolla una sola persona. El perfil de la
@@ -44,7 +44,7 @@ or analyzed. APS Conecta turns it into **one organized, searchable, collaborativ
 
 - **Built on free and open-source**, **self-hosted** software — no paid licenses. APS Conecta's
   own code is **proprietary**.
-- **Privacy-first**: built for internal operations, with **no patient / clinical data**.
+- **Privacy-first**: built for internal operations.
 - Built on established open platforms rather than from scratch.
 
 **How this organization works.** APS Conecta is built by one person. The organization profile is
