@@ -35,7 +35,7 @@ organización es público; los repositorios se mantienen **privados**. Las regla
 en [`CONTRIBUTING.md`](https://github.com/APS-Conecta/.github/blob/main/CONTRIBUTING.md) y la
 política de seguridad en [`SECURITY.md`](https://github.com/APS-Conecta/.github/blob/main/SECURITY.md).
 
-🔗 **[apsconecta.cl](https://www.apsconecta.cl)** — *sitio en construcción; el dominio aún no resuelve.*
+🔗 **[apsconecta.cl](https://apsconecta.cl)** — *sitio público de la organización, en línea.*
 
 ---
 
@@ -68,4 +68,4 @@ public; the repositories stay **private**. Collaboration rules live in
 [`CONTRIBUTING.md`](https://github.com/APS-Conecta/.github/blob/main/CONTRIBUTING.md), and the
 security policy in [`SECURITY.md`](https://github.com/APS-Conecta/.github/blob/main/SECURITY.md).
 
-🔗 **[apsconecta.cl](https://www.apsconecta.cl)** — *site under construction; the domain does not resolve yet.*
+🔗 **[apsconecta.cl](https://apsconecta.cl)** — *the organization's public site, online.*
