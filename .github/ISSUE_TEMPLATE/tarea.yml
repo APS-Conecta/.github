@@ -1,0 +1,14 @@
+name: Tarea
+description: Un trabajo por hacer.
+type: Task
+body:
+  - type: textarea
+    id: que-hacer
+    attributes:
+      label: ¿Qué hay que hacer?
+    validations:
+      required: true
+  - type: textarea
+    id: listo
+    attributes:
+      label: ¿Cómo sabremos que está listo?

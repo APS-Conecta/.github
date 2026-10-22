@@ -1,0 +1,7 @@
+{
+  "name": "fixture",
+  "private": true,
+  "scripts": {
+    "build": "mkdir -p js && cp src/main.js js/fixture-main.js"
+  }
+}

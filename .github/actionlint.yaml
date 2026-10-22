@@ -1,0 +1,5 @@
+# actionlint 1.7.12 predates the documented job.workflow_* context, which app-release.yml reads.
+paths:
+  .github/workflows/app-release.yml:
+    ignore:
+      - 'property "workflow_(repository|sha|ref)" is not defined'
