@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 APS Conecta
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    name: Packer self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install signify
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y signify-openbsd
+          command -v signify >/dev/null || sudo ln -sf "$(command -v signify-openbsd)" /usr/local/bin/signify
+      - run: shellcheck scripts/pack-app.sh
+      - run: bash scripts/pack-app.sh --self-test
+
+  lint:
+    name: actionlint and zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint 1.7.12
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/actionlint.tar.gz" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint"
+      - name: zizmor 1.31.1
+        run: pipx run zizmor==1.31.1 .github/workflows
+
+  fixture:
+    name: Fixture caller
+    # zizmor prefers $/ over ./ here; actionlint 1.7.12 cannot parse $/ yet.
+    uses: ./.github/workflows/app-release.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: write # GitHub checks the nested publish job's grant before its if:; publish: false skips it
+    with:
+      app-id: fixture
+      app-dir: tests/fixture
+      publish: false

@@ -1,0 +1,16 @@
+name: Error
+description: Algo no funciona como debería.
+type: Bug
+body:
+  - type: textarea
+    id: que-ocurrio
+    attributes:
+      label: ¿Qué ocurrió?
+      description: Qué hizo, qué esperaba y qué pasó.
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducirlo
+      description: Los comandos exactos y dónde se ejecutan (servidor, contenedor o navegador).

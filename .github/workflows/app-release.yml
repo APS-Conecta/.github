@@ -1,0 +1,162 @@
+# SPDX-FileCopyrightText: 2026 APS Conecta
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The shared app release. An app repo calls it, pinned by commit SHA, on pull requests and on v* tags:
+#
+#   on:
+#     pull_request:
+#     push:
+#       tags: ["v*"]
+#   jobs:
+#     release:
+#       uses: APS-Conecta/.github/.github/workflows/app-release.yml@<commit sha> # <date>
+#       permissions:
+#         contents: write
+#       with:
+#         app-id: <info.xml id>
+#       secrets:
+#         APP_SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
+#         APP_SIGNING_KEY_PASSWORD: ${{ secrets.APP_SIGNING_KEY_PASSWORD }}
+#
+# A pull request builds and packs. A v* tag also checks the tag against info.xml and the vendored
+# aps-common copies, then, inside the caller's protected `release` environment (the app key's only
+# home), signs SHA256SUMS, proves it against the suite's apps.pub and publishes
+# <id>.tar.gz, info.xml, SHA256SUMS and SHA256SUMS.minisig. The build job never sees the key.
+name: App release
+
+on:
+  workflow_call:
+    inputs:
+      app-id:
+        description: The app id, as in appinfo/info.xml.
+        required: true
+        type: string
+      app-dir:
+        description: The app's directory in the repo.
+        default: "."
+        type: string
+      node-version:
+        description: The Node.js version the build runs on.
+        default: "24"
+        type: string
+      build:
+        description: The build command, run in app-dir.
+        default: npm ci && npm run build
+        type: string
+      publish:
+        description: Publish on a v* tag. False only builds and packs.
+        default: true
+        type: boolean
+    secrets:
+      APP_SIGNING_KEY:
+        description: The app key (the .sec file's contents), from the caller's release environment.
+        required: false
+      APP_SIGNING_KEY_PASSWORD:
+        description: The app key's passphrase.
+        required: false
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build and pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      APP_ID: ${{ inputs.app-id }}
+      APP_DIR: app/${{ inputs.app-dir }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: app
+          persist-credentials: false
+      - name: Check out the packer at this workflow's own commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: tools
+          persist-credentials: false
+      - name: The tag is v + info.xml's version
+        if: github.ref_type == 'tag'
+        run: bash tools/scripts/pack-app.sh tag "$APP_DIR" "$TAG"
+      - name: The vendored aps-common copies equal aps-common
+        if: github.ref_type == 'tag'
+        run: bash tools/scripts/pack-app.sh parity "$APP_DIR"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager-cache: false
+      - name: Build
+        working-directory: app/${{ inputs.app-dir }}
+        env:
+          BUILD: ${{ inputs.build }}
+        run: bash -euo pipefail -c "$BUILD"
+      - name: Pack
+        run: bash tools/scripts/pack-app.sh pack "$APP_ID" "$APP_DIR" dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-release
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Sign and publish
+    needs: build
+    if: inputs.publish && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    env:
+      APP_ID: ${{ inputs.app-id }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: The caller pins this workflow by commit SHA
+        env:
+          WORKFLOW_REF: ${{ job.workflow_ref }}
+        run: |
+          [[ "$WORKFLOW_REF" =~ @[0-9a-f]{40}$ ]] \
+            || { echo "::error::call app-release.yml by commit SHA, not @${WORKFLOW_REF##*@}"; exit 1; }
+      - name: Check out the packer at this workflow's own commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: tools
+          persist-credentials: false
+      - name: Check out apps.pub, the app key the installer trusts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: APS-Conecta/instalador
+          ref: main
+          path: suite
+          sparse-checkout: apps.pub
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Install signify
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y signify-openbsd
+          command -v signify >/dev/null || sudo ln -sf "$(command -v signify-openbsd)" /usr/local/bin/signify
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: app-release
+          path: dist
+      - name: Sign and prove against apps.pub
+        env:
+          APP_SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
+          APP_SIGNING_KEY_PASSWORD: ${{ secrets.APP_SIGNING_KEY_PASSWORD }}
+        run: bash tools/scripts/pack-app.sh sign dist suite/apps.pub
+      - name: Publish the release, latest only for the highest version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          top="$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags" --jq '.[].name' \
+            | grep -E '^v[0-9]+(\.[0-9]+)+$' | sort -V | tail -n 1)"
+          latest=false; [ "$top" = "$TAG" ] && latest=true
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --latest="$latest" \
+            "dist/$APP_ID.tar.gz" dist/info.xml dist/SHA256SUMS dist/SHA256SUMS.minisig

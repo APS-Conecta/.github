@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>fixture</id>
+    <name>Fixture</name>
+    <summary>The shared release workflow's fixture app.</summary>
+    <description>The shared release workflow's fixture app.</description>
+    <version>1.0.0</version>
+    <licence>agpl</licence>
+    <author>APS Conecta</author>
+    <namespace>Fixture</namespace>
+    <category>tools</category>
+    <bugs>https://github.com/APS-Conecta/.github/issues</bugs>
+    <dependencies>
+        <nextcloud min-version="34" max-version="34"/>
+    </dependencies>
+</info>
