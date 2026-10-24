@@ -26,6 +26,12 @@
 # The one caller escape hatch is `shipped-bundle: true`, for an app whose upstream is unreachable
 # and whose tarball is the source of truth: its bundle ships as committed bytes (with a no-op
 # build) and the packer accepts it — for that caller alone, and never beside a package.json.
+#
+# WHAT A CALLING REPO NEEDS BEFORE ITS FIRST v* TAG (owner-only, once per repo — instalador #35
+# created these mid-flight for IntraVox because they were written down nowhere): a `release`
+# environment carrying the APP_SIGNING_KEY and APP_SIGNING_KEY_PASSWORD secrets, and a `v*` tag
+# ruleset restricting tags to the owner. The pin must name a commit on this repo's default
+# branch — a local-only SHA fails the caller's workflow at parse time, with no logs.
 name: App release
 
 on:
