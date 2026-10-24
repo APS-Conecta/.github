@@ -22,6 +22,10 @@
 # aps-common copies, then, inside the caller's protected `release` environment (the app key's only
 # home), signs SHA256SUMS, proves it against the suite's apps.pub and publishes
 # <id>.tar.gz, info.xml, SHA256SUMS and SHA256SUMS.minisig. The build job never sees the key.
+#
+# The one caller escape hatch is `shipped-bundle: true`, for an app whose upstream is unreachable
+# and whose tarball is the source of truth: its bundle ships as committed bytes (with a no-op
+# build) and the packer accepts it — for that caller alone, and never beside a package.json.
 name: App release
 
 on:
@@ -43,6 +47,11 @@ on:
         description: The build command, run in app-dir.
         default: npm ci && npm run build
         type: string
+      shipped-bundle:
+        description: The app ships its bundle as committed bytes (upstream unreachable, no build
+          manifest — side_menu). The build input stays the no-op; a package.json refuses it.
+        default: false
+        type: boolean
       publish:
         description: Publish on a v* tag. False only builds and packs.
         default: true
@@ -96,6 +105,8 @@ jobs:
           BUILD: ${{ inputs.build }}
         run: bash -euo pipefail -c "$BUILD"
       - name: Pack
+        env:
+          SHIPPED_BUNDLE: ${{ inputs.shipped-bundle && '1' || '0' }}
         run: bash tools/scripts/pack-app.sh pack "$APP_ID" "$APP_DIR" dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

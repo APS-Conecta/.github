@@ -10,6 +10,11 @@
 #   pack-app.sh sign OUT PUB       OUT/SHA256SUMS.minisig, proven against PUB
 #   pack-app.sh --self-test        hermetic: fixture repos and throwaway keys, no network
 #
+# pack reads SHIPPED_BUNDLE=1 to accept a committed js/ bundle — the caller's `shipped-bundle`
+# input, for the one kind of app that may carry one: upstream unreachable and no build manifest
+# (side_menu), so the bundle ships as vendored bytes. A package.json still refuses it: an app
+# that can build ships nothing committed.
+#
 # sign reads the app key from APP_SIGNING_KEY (the .sec file's contents) and its passphrase from
 # APP_SIGNING_KEY_PASSWORD ("" for a key made with signify -G -n). APS_COMMON_URL overrides the
 # aps-common clone URL.
@@ -69,8 +74,18 @@ pack() {
   local id="$1" dir="$2" out="$3" ts rules tracked list
   [ -f "$dir/appinfo/info.xml" ] || die "$dir/appinfo/info.xml not found"
   [ "$(info_field "$dir/appinfo/info.xml" id)" = "$id" ] || die "info.xml's <id> is not $id"
-  tracked="$(git -C "$dir" ls-files -- ':(glob)js/*.js' ':(glob)js/*.mjs')"
-  [ -z "$tracked" ] || die "the bundle is committed (${tracked//$'\n'/ }); the release builds it — remove it from git"
+  # The bundle rule and its one exception. The release builds the bundle, so a committed js/ is
+  # refused — unless the app ships it (SHIPPED_BUNDLE=1, the workflow's `shipped-bundle` input):
+  # the honest state of an app whose upstream is unreachable and whose tarball is the source of
+  # truth, so the bundle arrives as vendored bytes. A package.json still refuses it, because a
+  # buildable app always builds instead.
+  if [ "${SHIPPED_BUNDLE:-0}" = 1 ]; then
+    [ ! -f "$dir/package.json" ] \
+      || die "shipped-bundle refuses a package.json — the release builds a bundle it can build"
+  else
+    tracked="$(git -C "$dir" ls-files -- ':(glob)js/*.js' ':(glob)js/*.mjs')"
+    [ -z "$tracked" ] || die "the bundle is committed (${tracked//$'\n'/ }); the release builds it — remove it from git"
+  fi
   mkdir -p "$out"
   [ -z "$(ls -A "$out")" ] || die "$out is not empty"
   scratch
@@ -223,6 +238,22 @@ if [ "${1:-}" = "--self-test" ]; then
   ( cd "$tmp/unbuilt" && git add -f js/demo-main.mjs && git -c user.email=t@test.invalid -c user.name=t commit -qm bundle )
   run pack demo "$tmp/unbuilt" "$tmp/o8"
   check "refused: a committed bundle — the release builds it" '[ "$rc" -ne 0 ]'
+
+  # shipped-bundle — the caller's declaration that the bundle ships as vendored bytes: an app
+  # cloned from a source nobody can reach (side_menu), with no build manifest of its own. The
+  # committed bundle packs and ships; a package.json still refuses it, because a buildable app
+  # builds instead of shipping.
+  git clone -q "$tmp/app" "$tmp/shipped"
+  build "$tmp/shipped"
+  ( cd "$tmp/shipped" && git rm -q package.json && git add -f js/demo-main.mjs \
+      && git -c user.email=t@test.invalid -c user.name=t commit -qm "a bundle that ships as vendored bytes" )
+  shipped() { rc=0; SHIPPED_BUNDLE=1 bash "$SELF" pack demo "$1" "$2" >/dev/null 2>&1 || rc=$?; }
+  shipped "$tmp/shipped" "$tmp/o9"
+  check "shipped-bundle: a committed bundle with no build packs, and it ships" \
+    '[ "$rc" -eq 0 ] && [ -f "$tmp/o9/demo.tar.gz" ] && has "$tmp/o9" js/demo-main.mjs'
+  shipped "$tmp/app" "$tmp/o10"
+  check "shipped-bundle: a package.json refuses it — a buildable app never ships its bundle committed" \
+    '[ "$rc" -ne 0 ] && [ ! -e "$tmp/o10/demo.tar.gz" ]'
 
   # throwaway keys: a passphrase-less one, an encrypted one, and an unrelated public key
   ( umask 077 && signify -G -n -p "$tmp/plain.pub" -s "$tmp/plain.sec" -c test \
