@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   self-test:
-    name: Packer self-test
+    name: Self-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -23,8 +23,9 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y signify-openbsd
           command -v signify >/dev/null || sudo ln -sf "$(command -v signify-openbsd)" /usr/local/bin/signify
-      - run: shellcheck scripts/pack-app.sh
+      - run: shellcheck scripts/pack-app.sh scripts/community-check.sh
       - run: bash scripts/pack-app.sh --self-test
+      - run: bash scripts/community-check.sh --self-test
 
   lint:
     name: actionlint and zizmor
