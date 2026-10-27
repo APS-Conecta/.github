@@ -6,7 +6,7 @@
 How an APS-Conecta fork app takes a new upstream: **rebase**, one local feature per commit,
 then verify with the repo's own gates. Written from the IntraVox rebase (instalador #35 —
 47 local commits onto a pre-rewrite upstream, eight conflict seams resolved by hand);
-eurooffice and desktop_workspace follow the same road.
+eurooffice follows the same road.
 
 A rebase rewrites the fork's `main`. Do it on a branch, keep a backup ref, and diff the
 result against it before anything is pushed — the old tags (the bake's pins) stay where
