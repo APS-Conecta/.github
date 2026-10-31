@@ -14,6 +14,8 @@
 # input, for the one kind of app that may carry one: upstream unreachable and no build manifest
 # (side_menu), so the bundle ships as vendored bytes. A package.json still refuses it: an app
 # that can build ships nothing committed.
+# PHP_ONLY=1 packs server apps without a browser bundle. Such an app has runtime PHP
+# classes and carries neither a frontend build manifest nor a js/ directory.
 #
 # sign reads the app key from APP_SIGNING_KEY (the .sec file's contents) and its passphrase from
 # APP_SIGNING_KEY_PASSWORD ("" for a key made with signify -G -n). APS_COMMON_URL overrides the
@@ -71,9 +73,15 @@ DEFAULT_EXCLUDES='+ /.htaccess
 
 # pack ID DIR OUT — stage DIR's runtime files as ID/, tar them deterministically, write SHA256SUMS
 pack() {
-  local id="$1" dir="$2" out="$3" ts rules tracked list
+  local id="$1" dir="$2" out="$3" ts rules tracked list php_only="${PHP_ONLY:-0}"
   [ -f "$dir/appinfo/info.xml" ] || die "$dir/appinfo/info.xml not found"
   [ "$(info_field "$dir/appinfo/info.xml" id)" = "$id" ] || die "info.xml's <id> is not $id"
+  [[ "$php_only" = 0 || "$php_only" = 1 ]] || die "PHP_ONLY must be 0 or 1"
+  if [ "$php_only" = 1 ]; then
+    if [ -f "$dir/package.json" ] || [ -e "$dir/js" ] || [ "${SHIPPED_BUNDLE:-0}" = 1 ]; then
+      die "PHP-only apps cannot carry a frontend manifest or bundle"
+    fi
+  fi
   # The bundle rule and its one exception. The release builds the bundle, so a committed js/ is
   # refused — unless the app ships it (SHIPPED_BUNDLE=1, the workflow's `shipped-bundle` input):
   # the honest state of an app whose upstream is unreachable and whose tarball is the source of
@@ -106,7 +114,11 @@ pack() {
   ! grep -qv "^$id/" <<<"$list" || die "a member sits outside $id/"
   ! grep -qx "$id/appinfo/signature.json" <<<"$list" \
     || die "appinfo/signature.json is in the tarball; Nextcloud's integrity check would flag the app"
-  grep -qE "^$id/js/[^/]+\.m?js$" <<<"$list" || die "no bundle: $id/js/ has no .js or .mjs file after the build"
+  if [ "$php_only" = 1 ]; then
+    grep -qE "^$id/lib/.+\.php$" <<<"$list" || die "PHP-only app has no runtime PHP classes"
+  else
+    grep -qE "^$id/js/[^/]+\.m?js$" <<<"$list" || die "no bundle: $id/js/ has no .js or .mjs file after the build"
+  fi
   tar -xOzf "$work/$id.tar.gz" "$id/appinfo/info.xml" | cmp -s - "$dir/appinfo/info.xml" \
     || die "the tarball's info.xml is not the app's"
 
@@ -254,6 +266,22 @@ if [ "${1:-}" = "--self-test" ]; then
   shipped "$tmp/app" "$tmp/o10"
   check "shipped-bundle: a package.json refuses it — a buildable app never ships its bundle committed" \
     '[ "$rc" -ne 0 ] && [ ! -e "$tmp/o10/demo.tar.gz" ]'
+
+  mk_app "$tmp/php-only" 1.2.3
+  ( cd "$tmp/php-only" && git rm -q package.json \
+      && git -c user.email=t@test.invalid -c user.name=t commit -qm "server app without a frontend" )
+  php_pack() { rc=0; PHP_ONLY=1 bash "$SELF" pack demo "$1" "$2" >/dev/null 2>&1 || rc=$?; }
+  php_pack "$tmp/php-only" "$tmp/php-runtime"
+  check "PHP-only: runtime classes pack without a JavaScript bundle" \
+    '[ "$rc" -eq 0 ] && has "$tmp/php-runtime" lib/Application.php appinfo/info.xml && lacks "$tmp/php-runtime" "src|tests|package.json"'
+  php_pack "$tmp/app" "$tmp/php-with-manifest"
+  check "PHP-only: a frontend build manifest refuses the exemption" '[ "$rc" -ne 0 ]'
+  mkdir -p "$tmp/php-only/js"; echo 'runtime' > "$tmp/php-only/js/demo.js"
+  php_pack "$tmp/php-only" "$tmp/php-with-js"
+  check "PHP-only: browser JavaScript refuses the exemption" '[ "$rc" -ne 0 ]'
+  rm -rf "$tmp/php-only/js" "$tmp/php-only/lib"
+  php_pack "$tmp/php-only" "$tmp/php-empty"
+  check "PHP-only: a missing runtime class refuses publication" '[ "$rc" -ne 0 ]'
 
   # throwaway keys: a passphrase-less one, an encrypted one, and an unrelated public key
   ( umask 077 && signify -G -n -p "$tmp/plain.pub" -s "$tmp/plain.sec" -c test \
