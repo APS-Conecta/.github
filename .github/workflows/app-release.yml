@@ -58,6 +58,10 @@ on:
           manifest — side_menu). The build input stays the no-op; a package.json refuses it.
         default: false
         type: boolean
+      php-only:
+        description: The app has runtime PHP classes and no frontend manifest or JavaScript bundle.
+        default: false
+        type: boolean
       publish:
         description: Publish on a v* tag. False only builds and packs.
         default: true
@@ -113,6 +117,7 @@ jobs:
       - name: Pack
         env:
           SHIPPED_BUNDLE: ${{ inputs.shipped-bundle && '1' || '0' }}
+          PHP_ONLY: ${{ inputs.php-only && '1' || '0' }}
         run: bash tools/scripts/pack-app.sh pack "$APP_ID" "$APP_DIR" dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
