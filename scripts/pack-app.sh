@@ -255,6 +255,22 @@ if [ "${1:-}" = "--self-test" ]; then
   check "shipped-bundle: a package.json refuses it — a buildable app never ships its bundle committed" \
     '[ "$rc" -ne 0 ] && [ ! -e "$tmp/o10/demo.tar.gz" ]'
 
+  mk_app "$tmp/php-only" 1.2.3
+  ( cd "$tmp/php-only" && git rm -q package.json \
+      && git -c user.email=t@test.invalid -c user.name=t commit -qm "server app without a frontend" )
+  php_pack() { rc=0; PHP_ONLY=1 bash "$SELF" pack demo "$1" "$2" >/dev/null 2>&1 || rc=$?; }
+  php_pack "$tmp/php-only" "$tmp/php-runtime"
+  check "PHP-only: runtime classes pack without a JavaScript bundle" \
+    '[ "$rc" -eq 0 ] && has "$tmp/php-runtime" lib/Application.php appinfo/info.xml && lacks "$tmp/php-runtime" "src|tests|package.json"'
+  php_pack "$tmp/app" "$tmp/php-with-manifest"
+  check "PHP-only: a frontend build manifest refuses the exemption" '[ "$rc" -ne 0 ]'
+  mkdir -p "$tmp/php-only/js"; echo 'runtime' > "$tmp/php-only/js/demo.js"
+  php_pack "$tmp/php-only" "$tmp/php-with-js"
+  check "PHP-only: browser JavaScript refuses the exemption" '[ "$rc" -ne 0 ]'
+  rm -rf "$tmp/php-only/js" "$tmp/php-only/lib"
+  php_pack "$tmp/php-only" "$tmp/php-empty"
+  check "PHP-only: a missing runtime class refuses publication" '[ "$rc" -ne 0 ]'
+
   # throwaway keys: a passphrase-less one, an encrypted one, and an unrelated public key
   ( umask 077 && signify -G -n -p "$tmp/plain.pub" -s "$tmp/plain.sec" -c test \
       && printf 'pw\npw\n' | signify -G -p "$tmp/enc.pub" -s "$tmp/enc.sec" -c test >/dev/null \
