@@ -78,8 +78,9 @@ pack() {
   [ "$(info_field "$dir/appinfo/info.xml" id)" = "$id" ] || die "info.xml's <id> is not $id"
   [[ "$php_only" = 0 || "$php_only" = 1 ]] || die "PHP_ONLY must be 0 or 1"
   if [ "$php_only" = 1 ]; then
-    [ ! -f "$dir/package.json" ] && [ ! -e "$dir/js" ] && [ "${SHIPPED_BUNDLE:-0}" != 1 ] \
-      || die "PHP-only apps cannot carry a frontend manifest or bundle"
+    if [ -f "$dir/package.json" ] || [ -e "$dir/js" ] || [ "${SHIPPED_BUNDLE:-0}" = 1 ]; then
+      die "PHP-only apps cannot carry a frontend manifest or bundle"
+    fi
   fi
   # The bundle rule and its one exception. The release builds the bundle, so a committed js/ is
   # refused — unless the app ships it (SHIPPED_BUNDLE=1, the workflow's `shipped-bundle` input):
