@@ -151,13 +151,13 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: tools
           persist-credentials: false
-      - name: Check out apps.pub, the app key the installer trusts
+      - name: Check out apps.pub, the app key the suite trusts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: APS-Conecta/instalador
+          repository: APS-Conecta/gestion-aio
           ref: main
           path: suite
-          sparse-checkout: apps.pub
+          sparse-checkout: aps/provisionador/apps.pub
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Install signify
@@ -172,7 +172,7 @@ jobs:
         env:
           APP_SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
           APP_SIGNING_KEY_PASSWORD: ${{ secrets.APP_SIGNING_KEY_PASSWORD }}
-        run: bash tools/scripts/pack-app.sh sign dist suite/apps.pub
+        run: bash tools/scripts/pack-app.sh sign dist suite/aps/provisionador/apps.pub
       - name: Publish the release, latest only for the highest version
         env:
           GH_TOKEN: ${{ github.token }}
