@@ -1,0 +1,7 @@
+// SPDX-FileCopyrightText: 2026 APS Conecta
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// a hex in a line comment, #000, is not a colour
+.title {
+	font-size: var(--font-size-large, 1.5rem);
+	color: var(--color-primary-element);
+}
