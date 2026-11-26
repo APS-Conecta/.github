@@ -7,7 +7,7 @@
 # ships (.css, .scss and Vue <style> blocks) and every Vue <template>, and reports file:line for
 #
 #   a literal colour (a hex or a colour function) outside a var() fallback;
-#   a font size in px;
+#   a font size in px (font-size, or the size in the font shorthand);
 #   a plain <button> in a template (use NcButton).
 #
 # It skips vendored, built, test and translation folders, and it never reads scripts or data:
@@ -38,17 +38,22 @@ check_tree() {
   fi
 
   # A .css or .scss file is all style. A .vue file is read in its top-level <template> and <style>
-  # blocks, whose tags sit at the start of a line; its <script> is not read.
+  # blocks, whose tags sit at the start of a line (a one-line block closes on its own line); its
+  # <script> is not read.
   awk '
-    # uncomment(s, opener, closer) — s without its comments; in_comment carries one across lines
-    function uncomment(s, opener, closer,   out, i) {
+    # uncomment(s, opener, closer, line) — s without its comments: opener to closer, which
+    # in_comment carries across lines, and, given the line regex, a comment to the end of the line.
+    # Whichever opens first wins.
+    function uncomment(s, opener, closer, line,   out, i) {
       out = ""
       while (s != "") {
         if (in_comment) {
           if (!(i = index(s, closer))) return out
           s = substr(s, i + length(closer)); in_comment = 0
         } else {
-          if (!(i = index(s, opener))) return out s
+          i = index(s, opener)
+          if (line != "" && match(s, line) && (!i || RSTART < i)) return out substr(s, 1, RSTART - 1)
+          if (!i) return out s
           out = out substr(s, 1, i - 1) " "; s = substr(s, i + length(opener)); in_comment = 1
         }
       }
@@ -71,8 +76,7 @@ check_tree() {
     }
     function report(what) { printf "%s:%d: %s\n", file, FNR, what; bad = 1 }
     function check_style(s,   rest, n) {
-      s = uncomment(s, "/*", "*/")
-      sub(/(^|[[:space:]])\/\/.*/, "", s)
+      s = uncomment(s, "/*", "*/", "(^|[[:space:]])//")
       s = tolower(unvar(s))
       for (rest = s; match(rest, /#[0-9a-f]+/); rest = substr(rest, RSTART + RLENGTH)) {
         n = RLENGTH - 1
@@ -85,6 +89,10 @@ check_tree() {
       }
       for (rest = s; match(rest, /font-size[[:space:]]*:[[:space:]]*[0-9.]+px/); rest = substr(rest, RSTART + RLENGTH)) {
         n = substr(rest, RSTART, RLENGTH); sub(/^font-size[[:space:]]*:[[:space:]]*/, "", n)
+        report("font size " n ", use rem or a --font-size-* variable")
+      }
+      for (rest = s; match(rest, /(^|[^a-z0-9_-])font[[:space:]]*:([^;}]*[[:space:]])?[0-9.]+px/); rest = substr(rest, RSTART + RLENGTH)) {
+        n = substr(rest, RSTART, RLENGTH); sub(/^.*[[:space:]:]/, "", n)
         report("font size " n ", use rem or a --font-size-* variable")
       }
     }
@@ -100,7 +108,7 @@ check_tree() {
     vue && section == "" && /^<style([[:space:]>]|$)/ { section = "style"; in_comment = 0 }
     section == "style" { check_style($0) }
     section == "template" { check_template($0) }
-    vue && /^<\/(template|style)>/ { section = ""; in_comment = 0 }
+    vue && (/^<\/(template|style)>/ || /^<(template|style)([[:space:]>]).*<\/(template|style)>[[:space:]]*$/) { section = ""; in_comment = 0 }
     END { exit bad }
   ' "${files[@]}"
 }
@@ -150,6 +158,24 @@ self_test() {
   d="$(fixture px-font-size)"
   printf '.a {\n\tpadding: 0.5rem;\n\tfont-size: 12px;\n}\n' > "$d/src/small.css"
   must_fail "font-size: 12px" "$d" "src/small.css:3: "
+
+  d="$(fixture font-shorthand)"
+  printf '.a { font: 12px/1.5 sans-serif; }\n.b { font: 600 14px var(--f); }\n.c { font:12px sans-serif; }\n' > "$d/src/type.css"
+  must_fail "font: 12px/1.5" "$d" "src/type.css:1: "
+  must_fail "font: 600 14px" "$d" "src/type.css:2: "
+  must_fail "font:12px" "$d" "src/type.css:3: "
+
+  d="$(fixture font-line-height)"
+  printf '.a { font: 1rem/20px sans-serif; }\n:root { --font: 12px; }\n' > "$d/src/type.css"
+  must_pass "a px line-height in the font shorthand, a --font property" "$d"
+
+  d="$(fixture line-comment-first)"
+  printf '// note /* x\n.a { color: #fff; }\n' > "$d/src/note.scss"
+  must_fail "a // comment that holds /* ends with its line" "$d" "src/note.scss:2: "
+
+  d="$(fixture one-line-template)"
+  printf '<template><div /></template>\n\n<style scoped>\n.a {\n\tcolor: #fff;\n}\n</style>\n' > "$d/src/Short.vue"
+  must_fail "a <style> after a one-line <template>" "$d" "src/Short.vue:5: "
 
   d="$(fixture plain-button)"
   printf '<template>\n\t<div>\n\t\t<button @click="go">Ir</button>\n\t</div>\n</template>\n' > "$d/src/Plain.vue"
