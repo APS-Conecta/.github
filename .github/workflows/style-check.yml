@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 APS Conecta
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The shared style check. An own app's CI calls it, pinned by commit SHA, so the app's styles keep to
+# Nextcloud's variables and components:
+#
+#   on:
+#     pull_request:
+#     push:
+#       branches: [main]
+#   jobs:
+#     style:
+#       uses: APS-Conecta/.github/.github/workflows/style-check.yml@<commit sha> # <date>
+#       permissions:
+#         contents: read
+#       with:
+#         path: src # optional: the part of the tree to check while the app migrates; default the whole repo
+#
+# It runs scripts/style-check.sh on the caller's checkout and fails with file:line for each literal
+# colour outside a var() fallback, font size in px and plain <button>. The script's header says what
+# it reads and skips. The pin must name a commit on this repo's default branch.
+name: Style check
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: The directory to check, relative to the repo root.
+        default: "."
+        type: string
+
+permissions: {}
+
+jobs:
+  check:
+    name: Style check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: app
+          persist-credentials: false
+      - name: Check out the style check at this workflow's own commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: tools
+          persist-credentials: false
+      - name: Check the styles
+        working-directory: app
+        env:
+          STYLE_PATH: ${{ inputs.path }}
+        run: bash ../tools/scripts/style-check.sh "$STYLE_PATH"
